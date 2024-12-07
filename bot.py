@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration variables
 BOT_TOKEN = "7508399265:AAHZcTfGFafKEhKNjeCISDfVqEyZ4jPHPsk"  # Replace with your actual token
-SERVICE_ACCOUNT_FILE = r"C:\Users\User\Desktop\StudyMaterial\api\service-account.json"
+SERVICE_ACCOUNT_FILE = "./service-account.json"
 OWNER_USERNAME = "@MrGadhvii"
 
 # Initialize Google Drive API credentials and service
