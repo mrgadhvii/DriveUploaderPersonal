@@ -1,23 +1,24 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+import time
+import shutil
+import threading
+import win32api
+import win32con
+import win32file
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.service_account import Credentials
-import time
-import shutil
-import threading
-
-
 
 # Enable logging for debugging and monitoring
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration variables
 BOT_TOKEN = "7508399265:AAHZcTfGFafKEhKNjeCISDfVqEyZ4jPHPsk"  # Replace with your actual token
-SERVICE_ACCOUNT_FILE = "./service-account.json"
+SERVICE_ACCOUNT_FILE = r"C:\Users\User\Desktop\StudyMaterial\api\service-account.json"
 OWNER_USERNAME = "@MrGadhvii"
 
 # Initialize Google Drive API credentials and service
@@ -64,7 +65,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [[InlineKeyboardButton(f"{key}", callback_data=f"select_{key}")] for key in FOLDER_OPTIONS.keys()]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("𝘊𝘩𝘰𝘰𝘴𝘦 𝘢 𝘧𝘰𝘭𝘥𝘦𝘳 𝘁𝘰 𝘂𝘱𝘭𝘰𝘢𝘥 𝘺𝘰𝘶𝘳 𝘧𝘪𝘭𝘦𝘴​ :", reply_markup=reply_markup)
+    await update.message.reply_text("𝘊𝘩𝘰𝘰𝘴𝘦 𝘢 𝘧𝘰𝘭𝘥𝘦𝘳 𝘁𝘰 𝘂𝘱𝘭𝘰𝘢𝘥 𝘺𝘰𝘶𝘳 𝘧𝘪𝘭𝘦 ​ :", reply_markup=reply_markup)
 
 # Callback handler for folder selection
 async def select_folder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -110,18 +111,13 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await update.message.reply_text("File uploaded successfully! The temporary folder will now be deleted.")
 
                 # Attempt to delete the temporary file with retry logic
-                for attempt in range(3):  # Try up to 3 times
+                for attempt in range(5):  # Try up to 5 times
                     try:
-                        os.remove(file_path)  # Remove the uploaded file
-                        logger.info(f"Removed file: {file_path}")
+                        force_delete(file_path)  # Remove the uploaded file
                         break  # Exit the loop if successful
-                    except OSError as e:
-                        if e.winerror == 32:  # File is being used by another process
-                            logger.warning(f"File is still in use, retrying... (Attempt {attempt + 1})")
-                            time.sleep(1)  # Wait for 1 second before retrying
-                        else:
-                            logger.error(f"Error removing file: {e}")
-                            break  # Exit the loop on other errors
+                    except Exception as e:
+                        logger.error(f"Error removing file: {e}")
+                        time.sleep(1)  # Wait for 1 second before retrying
 
                 # Delete the temporary directory
                 shutil.rmtree(temp_dir)  # Remove the temporary directory
@@ -134,6 +130,29 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text("You need to select a folder first using /upload.")
     else:
         await update.message.reply_text("Only PDF files are allowed!")
+
+def force_delete(file_path):
+    try:
+        # Attempt to delete the file
+        os.remove(file_path)
+    except OSError as e:
+        if e.winerror == 32:  # File is being used by another process
+            # Forcefully delete the file using Windows API
+            handle = win32file.CreateFile(
+                file_path,
+                win32con.GENERIC_READ | win32con.GENERIC_WRITE,
+                0,  # No sharing
+                None,
+                win32con.OPEN_EXISTING,
+                win32con.FILE_ATTRIBUTE_NORMAL,
+                None
+            )
+            win32file.DeleteFile(file_path)
+            win32file.CloseHandle(handle)
+            logger.info(f"Forcefully removed file: {file_path}")
+        else:
+            logger.error(f"Error removing file: {e}")
+
 # Main function to set up the bot
 def main() -> None:
     # Create the bot application
@@ -143,7 +162,6 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("upload", upload))
-    application.add_handler(CallbackQueryHandler(select_folder, pattern="^select_"))
     application.add_handler(CallbackQueryHandler(select_folder, pattern="^select_"))
     application.add_handler(MessageHandler(filters.Document.ALL & filters.Document.MimeType("application/pdf"), handle_file))
 
